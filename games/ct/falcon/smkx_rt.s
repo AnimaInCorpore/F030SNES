@@ -111,6 +111,8 @@ M7DIRTY	macro
 	endm
 
 
+	include	"info.i"		; tools/port_info.py: info texts, the player's files
+
 	section	text,code
 
 ; ---------------------------------------------------------------------------
@@ -118,6 +120,7 @@ M7DIRTY	macro
 
 start:
 	lea	rt_ustack_top,sp
+	bsr	info_start		; the info screen; reads and checks the player's files
 	bsr	rt_m7_boot		; XBIOS DSP and sound calls: user mode
 	clr.l	-(sp)
 	move.w	#$20,-(sp)		; Super(0)
@@ -3970,7 +3973,6 @@ rt_text_end:
 	section	data,data
 
 nf_name:		dc.b	"NF_STDERR",0
-msg_start:		dc.b	"SMKX: translated Chrono Trigger starting",10,0
 msg_reset_returned:	dc.b	"SMKX: reset procedure returned",10,0
 msg_hold:		dc.b	"SMKX: holding the picture",10,0
 msg_frames:		dc.b	"SMKX: frame limit reached",10,0
@@ -4057,9 +4059,7 @@ msg_ramcode:		dc.b	"SMKX WRAM code: unsupported opcode << 24 | WRAM address $",0
 msg_plpwidth:		dc.b	"SMKX PLP pulled widths no successor covers, P = $",0
 	even
 
-smkx_rom:
-	incbin	"ct.sfc"
-	even
+	include	"smkx_info.s"		; the info screen; the player's ROM, read at startup
 smkx_oklab:				; BGR555 -> OKLab (tools/smkx/oklab.py)
 	incbin	"oklab555.bin"
 

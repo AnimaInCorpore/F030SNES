@@ -17,6 +17,12 @@ specific and wins for that port.
   tables, snapshots, captures), or a build product. They live in
   `games/<game>/assets/` and `games/<game>/build/`, both ignored. Check
   `git status` before every commit for files that should not be there.
+- Releases carry no game content: each program reads the player's ROM (and
+  SMK's DSP-1 dump) at start (`falcon/smkx_info.s`, `tools/port_info.py`),
+  and `tools/release.py` refuses a program in which a 32-byte block of
+  them occurs. Never build a ROM, a part of one or data copied from one into
+  a program; a table the runtime needs from the ROM is read from
+  `smkx_rom` at run time.
 - The disassemblies are submodules under `games/<game>/third_party/`, pinned.
   Change a pin only on purpose and say so in the commit message and the
   game's README.
@@ -33,6 +39,9 @@ engine:
   the ports' `AGENTS.md` ("Sharing findings between the SNES ports"). The
   sibling paths there (`../smk`, `../ct`, ...) are relative to
   `games/<game>/`.
+- Exception: `falcon/smkx_info.s` (the info screen and the ROM loader) is
+  the same file in every port and changes in all of them at once; the game
+  data it shows comes from `tools/games.py`.
 - Do not change another port's code as a side effect; each port takes fixes
   over itself, with its own Hatari check.
 - Other sessions may work in other ports at the same time. Re-read a notes

@@ -98,7 +98,14 @@ $(SMWX)/oklab555.bin: tools/smkx/oklab.py
 	mkdir -p $(SMWX)
 	python3 -m tools.smkx.oklab $@
 
-$(SMWX)/SMWX.TOS: $(SMWX)/sources.txt falcon/smkx_rt.s falcon/smkx_rt.i \
+# The info screen and the player's files, read at startup (tools/port_info.py,
+# tools/games.py): run every time, rewritten only when it changes.
+# INFO_WAIT=n keeps the screen n seconds (a key skips); a release uses it.
+INFO_WAIT ?= 0
+$(SMWX)/info.i: $(SMWX)/sources.txt ../../tools/port_info.py ../../tools/games.py FORCE
+	python3 ../../tools/port_info.py smw $@ --rom $(SMWX)/smw.sfc --wait $(INFO_WAIT)
+
+$(SMWX)/SMWX.TOS: $(SMWX)/sources.txt falcon/smkx_rt.s falcon/smkx_rt.i falcon/smkx_info.s $(SMWX)/info.i \
   falcon/smkx_video.s falcon/smkx_lcput.s falcon/smkx_m7dsp.s $(SMWX_C_OBJ) $(SMWX)/flags.stamp \
   $(SMWX)/m7c2p.bin $(SMWX)/m7c2p_boot.bin $(SMWX)/ppu.bin $(SMWX)/ppu7.bin $(SMWX)/ppuw.bin $(SMWX)/ppulc.bin $(SMWX)/ppulcw.bin $(SMWX)/input.s
 	$(VASM) -Felf -m68030 -quiet -nowarn=62 -Ifalcon -I$(SMWX) -DSMKX_FRAMES=$(SMWX_FRAMES) \

@@ -8,6 +8,10 @@ Falcon's DSP56001 (tile modes in eight Videl planes with CGRAM as the 256
 colours, Mode 7 in four planes with 16 colours chosen per frame in OKLab), the
 sound program runs on an SPC700 interpreter.
 
+**Highly experimental.** In their current form the ports are far too slow to
+play, the rendering above all: they show how far each translation gets, not
+a game to sit down with.
+
 This project is developed with AI coding agents (Claude Code): much of the
 translators, runtimes, tools and documentation was written by them under the
 author's direction. Correctness is checked by testing rather than by trust:
@@ -33,18 +37,25 @@ Falcon has not been measured for most of them. Each game's `README.md`,
 ## Download
 
 Releases are packed with `make release VERSION=<v>` (see
-[Release](#release)): one self-contained TOS program per game, the game's code
-and data built in, and a `README.TXT` with the controls. Requirements: a
+[Release](#release)): one TOS program per game and a `README.TXT`. No game is
+included: bring your own ROM. Each program reads it from next to itself at
+start (`SMW.SFC` for `SMWX.TOS` and so on; a `.SMC` with a copier header
+works too; Super Mario Kart also reads the cartridge's DSP-1 dump as
+`DSP1.BIN`), checks it against the exact release it was translated from, and
+says on its info screen when a file is missing or wrong. Requirements: a
 Falcon030 with 14 MB of RAM (or Hatari).
 
-The ROMs are not part of this repository. To build from the sources, put the
-ROM named in each game's `assets/README.md` into `games/<game>/assets/`.
+The ROMs are not part of this repository either. To build from the sources,
+put the ROM named in each game's `assets/README.md` into
+`games/<game>/assets/`.
 
 ## Controls
 
 The same for every game: the keyboard is pad 1, by key position on a QWERTY
 layout (Atari scancodes): cursor keys = D-pad, X = B, Z = Y, S = A, A = X,
-Q = L, W = R, Return = Start, Space = Select, Esc = quit.
+Q = L, W = R, Return = Start, Space = Select, Esc = quit. Every program
+shows them on its info screen at start, with the game's state and the check
+of the player's files.
 
 ## Layout
 
@@ -54,13 +65,16 @@ Q = L, W = R, Return = Start, Space = Select, Esc = quit.
       AGENTS.md          the port's working rules
       Makefile           <game>x-source (translation), <game>x (the TOS), run-<game>x
       tools/smkx/        the 65816 -> 68030 translator (shared code, one copy per port)
-      falcon/            the TOS runtime (smkx_rt.s), video, DSP programs (falcon/dsp/)
+      falcon/            the TOS runtime (smkx_rt.s), video, DSP programs (falcon/dsp/);
+                         smkx_info.s: the info screen, reads and checks the ROM (alike in all ports)
       src/               reference renderer (snes_ppu.c), fast composer, palette, DSP driver
       scripts/           Hatari runners, profilers, benchmarks
       analysis/          findings; porting-notes.md collects what the other ports found
       third_party/       the pinned disassembly (git submodule)
       assets/            the user's ROM (untracked; assets/README.md)
       build/             generated code and the .TOS (untracked)
+    tools/games.py       the games: titles, states, the player's files, release settings
+    tools/port_info.py   writes each build's info.i (info texts, file names, checksums)
     tools/release.py     packs a release
     Makefile             build / run / release for all games
 
@@ -97,6 +111,13 @@ make all                  # build every game
 make release VERSION=0.1  # release/F030SNES-0.1/ and release/F030SNES-0.1.zip
 ```
 
-`tools/release.py` builds every game with its default settings, checks that
-each program is a TOS executable, and writes a `README.TXT` with the
-controls, each game's state and the SHA-256 of every file.
+`tools/release.py` builds every game with its default settings (plus the
+make variables in `tools/games.py`), the info screen held for 10 seconds and
+the version in its first line. It checks that each program is a TOS
+executable and that no 32-byte block of the ROM (or the DSP-1 dump) occurs in
+it, and writes a `README.TXT` with the player's files, the controls, each
+game's state and the SHA-256 of every program. The translated program is
+derived from the game's code, but none of the game's bytes are in it.
+
+A local build shows the info screen only for a moment; `INFO_WAIT=<seconds>`
+on any game's `make` holds it (`make -C games/smw smwx INFO_WAIT=10`).

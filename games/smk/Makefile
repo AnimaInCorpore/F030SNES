@@ -184,7 +184,14 @@ SMKX_INPUT ?=
 $(SMKX)/input.s: tools/smkx/input_script.py FORCE | $(SMKX)/sources.txt
 	python3 -m tools.smkx.input_script "$(SMKX_INPUT)" $@
 
-$(SMKX)/SMKX.TOS: $(SMKX)/sources.txt falcon/smkx_rt.s falcon/smkx_rt.i falcon/smkx_dsp1.s \
+# The info screen and the player's files, read at startup (tools/port_info.py,
+# tools/games.py): run every time, rewritten only when it changes.
+# INFO_WAIT=n keeps the screen n seconds (a key skips); a release uses it.
+INFO_WAIT ?= 0
+$(SMKX)/info.i: $(SMKX)/sources.txt ../../tools/port_info.py ../../tools/games.py FORCE
+	python3 ../../tools/port_info.py smk $@ --rom $(SMKX)/smk.sfc --wait $(INFO_WAIT) $(if $(SMKX_DSP1_DEF),--dsp1 $(DSP1_BIN))
+
+$(SMKX)/SMKX.TOS: $(SMKX)/sources.txt falcon/smkx_rt.s falcon/smkx_rt.i falcon/smkx_info.s $(SMKX)/info.i falcon/smkx_dsp1.s \
   falcon/smkx_upd.s falcon/smkx_video.s falcon/smkx_m7dsp.s falcon/smkx_dspboot.s falcon/smkx_lcput.s \
   $(SMKX_LC_OBJ) $(SMKX_LC_BINS) $(SMKX_DSP1_OBJ) $(SMKX_C_OBJ) \
   $(SMKX)/flags.stamp $(SMKX)/oklab555.bin $(SMKX)/ppu.bin $(SMKX)/input.s

@@ -136,7 +136,14 @@ $(DKCX)/oklab555.bin: tools/smkx/oklab.py
 	mkdir -p $(DKCX)
 	python3 -m tools.smkx.oklab $@
 
-$(DKCX)/DKCX.TOS: $(DKCX)/sources.txt falcon/smkx_rt.s falcon/smkx_rt.i \
+# The info screen and the player's files, read at startup (tools/port_info.py,
+# tools/games.py): run every time, rewritten only when it changes.
+# INFO_WAIT=n keeps the screen n seconds (a key skips); a release uses it.
+INFO_WAIT ?= 0
+$(DKCX)/info.i: $(DKCX)/sources.txt ../../tools/port_info.py ../../tools/games.py FORCE
+	python3 ../../tools/port_info.py dkc $@ --rom $(DKCX)/dkc.sfc --wait $(INFO_WAIT)
+
+$(DKCX)/DKCX.TOS: $(DKCX)/sources.txt falcon/smkx_rt.s falcon/smkx_rt.i falcon/smkx_info.s $(DKCX)/info.i \
   falcon/smkx_video.s falcon/smkx_lcput.s falcon/smkx_m7dsp.s falcon/smkx_dspboot.s $(DKCX_C_OBJ) $(DKCX)/flags.stamp \
   $(DKCX)/m7c2p.bin $(DKCX)/m7c2p_boot.bin $(DKCX)/ppu.bin $(DKCX)/ppu7.bin $(DKCX)/ppuw.bin $(DKCX)/ppulc.bin $(DKCX)/ppulcw.bin $(DKCX)/input.s
 	$(VASM) -Felf -m68030 -quiet -nowarn=62 -Ifalcon -I$(DKCX) -DSMKX_FRAMES=$(DKCX_FRAMES) \

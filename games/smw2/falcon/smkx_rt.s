@@ -87,6 +87,8 @@ M7DIRTY	macro
 	endm
 
 
+	include	"info.i"		; tools/port_info.py: info texts, the player's files
+
 	section	text,code
 
 ; ---------------------------------------------------------------------------
@@ -94,6 +96,7 @@ M7DIRTY	macro
 
 start:
 	lea	rt_ustack_top,sp
+	bsr	info_start		; the info screen; reads and checks the player's files
 	bsr	rt_m7_boot		; XBIOS DSP and sound calls: user mode
 	clr.l	-(sp)
 	move.w	#$20,-(sp)		; Super(0)
@@ -2353,7 +2356,6 @@ rt_text_end:
 	section	data,data
 
 nf_name:		dc.b	"NF_STDERR",0
-msg_start:		dc.b	"SMKX: translated Yoshi's Island starting",10,0
 msg_reset_returned:	dc.b	"SMKX: reset procedure returned",10,0
 msg_frames:		dc.b	"SMKX: frame limit reached",10,0
 msg_status:		dc.b	"SMKX: frame ",0
@@ -2429,9 +2431,7 @@ msg_at_site:		dc.b	" to the call at 65816 $",0
 msg_dispatch:		dc.b	"SMKX pointer dispatch to an untranslated target (ctx<<24|addr) $",0
 	even
 
-smkx_rom:
-	incbin	"yi.sfc"
-	even
+	include	"smkx_info.s"		; the info screen; the player's ROM, read at startup
 
 	section	bss,bss
 

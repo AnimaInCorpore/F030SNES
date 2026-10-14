@@ -136,7 +136,14 @@ $(FF6X)/oklab555.bin: tools/smkx/oklab.py
 	mkdir -p $(FF6X)
 	python3 -m tools.smkx.oklab $@
 
-$(FF6X)/FF6X.TOS: $(FF6X)/sources.txt falcon/smkx_rt.s falcon/smkx_rt.i falcon/ct_lz.s \
+# The info screen and the player's files, read at startup (tools/port_info.py,
+# tools/games.py): run every time, rewritten only when it changes.
+# INFO_WAIT=n keeps the screen n seconds (a key skips); a release uses it.
+INFO_WAIT ?= 0
+$(FF6X)/info.i: $(FF6X)/sources.txt ../../tools/port_info.py ../../tools/games.py FORCE
+	python3 ../../tools/port_info.py ff6 $@ --rom $(FF6X)/ff6.sfc --wait $(INFO_WAIT)
+
+$(FF6X)/FF6X.TOS: $(FF6X)/sources.txt falcon/smkx_rt.s falcon/smkx_rt.i falcon/smkx_info.s $(FF6X)/info.i falcon/ct_lz.s \
   falcon/smkx_video.s falcon/smkx_lcput.s falcon/smkx_m7dsp.s falcon/smkx_dspboot.s $(FF6X_C_OBJ) $(FF6X)/flags.stamp \
   $(FF6X)/oklab555.bin $(FF6X)/m7c2p.bin $(FF6X)/ppu.bin $(FF6X)/ppu7.bin $(FF6X)/ppuw.bin $(FF6X_LC_BIN) $(FF6X_DSP_BIN) $(FF6X)/input.s
 	$(VASM) -Felf -m68030 -quiet -nowarn=62 -Ifalcon -I$(FF6X) -DSMKX_FRAMES=$(FF6X_FRAMES) \

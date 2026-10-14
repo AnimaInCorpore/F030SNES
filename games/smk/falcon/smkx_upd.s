@@ -437,10 +437,16 @@ upd_trap:
 	move.l	d7,-(sp)
 	jmp	rt_upd_trap
 
-	section	data,data
+	ifd	DSP1_SUM
+	section	bss,bss
+	cnop	0,4
+upd_rom:	ds.b	2048		; data ROM, 1024 big-endian words: DSP1.BIN, read at startup (smkx_info.s)
+	else
+	section	data,data		; a test program (updtest.s): built in
 	cnop	0,2
 upd_rom:
 	incbin	"dsp1.bin",6144,2048	; data ROM, 1024 big-endian words
+	endif
 
 	section	bss,bss
 	cnop	0,4

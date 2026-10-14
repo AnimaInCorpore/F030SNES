@@ -115,7 +115,14 @@ $(YIX)/oklab555.bin: tools/smkx/oklab.py
 	mkdir -p $(YIX)
 	python3 -m tools.smkx.oklab $@
 
-$(YIX)/YIX.TOS: $(YIX)/sources.txt falcon/smkx_rt.s falcon/smkx_rt.i \
+# The info screen and the player's files, read at startup (tools/port_info.py,
+# tools/games.py): run every time, rewritten only when it changes.
+# INFO_WAIT=n keeps the screen n seconds (a key skips); a release uses it.
+INFO_WAIT ?= 0
+$(YIX)/info.i: $(YIX)/sources.txt ../../tools/port_info.py ../../tools/games.py FORCE
+	python3 ../../tools/port_info.py smw2 $@ --rom $(YIX)/yi.sfc --wait $(INFO_WAIT)
+
+$(YIX)/YIX.TOS: $(YIX)/sources.txt falcon/smkx_rt.s falcon/smkx_rt.i falcon/smkx_info.s $(YIX)/info.i \
   falcon/smkx_video.s falcon/smkx_lcput.s falcon/smkx_m7dsp.s $(YIX_C_OBJ) $(YIX)/flags.stamp \
   $(YIX)/m7c2p.bin $(YIX)/m7c2p_boot.bin $(YIX)/ppu.bin $(YIX)/ppu7.bin $(YIX)/ppuw.bin $(YIX)/ppulc.bin $(YIX)/ppulcw.bin \
   $(YIX)/input.s

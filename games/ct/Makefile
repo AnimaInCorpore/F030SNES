@@ -132,7 +132,14 @@ $(CTX)/oklab555.bin: tools/smkx/oklab.py
 	mkdir -p $(CTX)
 	python3 -m tools.smkx.oklab $@
 
-$(CTX)/CTX.TOS: $(CTX)/sources.txt falcon/smkx_rt.s falcon/smkx_rt.i falcon/ct_lz.s \
+# The info screen and the player's files, read at startup (tools/port_info.py,
+# tools/games.py): run every time, rewritten only when it changes.
+# INFO_WAIT=n keeps the screen n seconds (a key skips); a release uses it.
+INFO_WAIT ?= 0
+$(CTX)/info.i: $(CTX)/sources.txt ../../tools/port_info.py ../../tools/games.py FORCE
+	python3 ../../tools/port_info.py ct $@ --rom $(CTX)/ct.sfc --wait $(INFO_WAIT)
+
+$(CTX)/CTX.TOS: $(CTX)/sources.txt falcon/smkx_rt.s falcon/smkx_rt.i falcon/smkx_info.s $(CTX)/info.i falcon/ct_lz.s \
   falcon/smkx_video.s falcon/smkx_lcput.s falcon/smkx_m7dsp.s falcon/smkx_dspboot.s $(CTX_C_OBJ) $(CTX)/flags.stamp \
   $(CTX)/oklab555.bin $(CTX)/m7c2p.bin $(CTX)/ppu.bin $(CTX)/ppu7.bin $(CTX)/ppuw.bin $(CTX_LC_BIN) $(CTX_DSP_BIN) $(CTX)/input.s
 	$(VASM) -Felf -m68030 -quiet -nowarn=62 -Ifalcon -I$(CTX) -DSMKX_FRAMES=$(CTX_FRAMES) \

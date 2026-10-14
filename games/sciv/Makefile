@@ -138,7 +138,14 @@ $(SCIVX)/oklab555.bin: tools/smkx/oklab.py
 	mkdir -p $(SCIVX)
 	python3 -m tools.smkx.oklab $@
 
-$(SCIVX)/SCIVX.TOS: $(SCIVX)/sources.txt falcon/smkx_rt.s falcon/smkx_rt.i \
+# The info screen and the player's files, read at startup (tools/port_info.py,
+# tools/games.py): run every time, rewritten only when it changes.
+# INFO_WAIT=n keeps the screen n seconds (a key skips); a release uses it.
+INFO_WAIT ?= 0
+$(SCIVX)/info.i: $(SCIVX)/sources.txt ../../tools/port_info.py ../../tools/games.py FORCE
+	python3 ../../tools/port_info.py sciv $@ --rom $(SCIVX)/sciv.sfc --wait $(INFO_WAIT)
+
+$(SCIVX)/SCIVX.TOS: $(SCIVX)/sources.txt falcon/smkx_rt.s falcon/smkx_rt.i falcon/smkx_info.s $(SCIVX)/info.i \
   falcon/smkx_video.s falcon/smkx_lcput.s falcon/ssi_play.s falcon/smkx_m7dsp.s falcon/smkx_dspboot.s $(SCIVX_C_OBJ) $(SCIVX)/flags.stamp \
   $(SCIVX)/oklab555.bin $(SCIVX)/m7c2p.bin $(SCIVX)/ppu.bin $(SCIVX)/ppu7.bin $(SCIVX)/ppuw.bin $(SCIVX)/ppuret.bin $(SCIVX_LC_BIN) $(SCIVX_DSP_BIN) $(SCIVX)/input.s
 	$(VASM) -Felf -m68030 -quiet -nowarn=62 -Ifalcon -I$(SCIVX) -DSMKX_FRAMES=$(SCIVX_FRAMES) \
