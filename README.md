@@ -94,10 +94,19 @@ into the port it was found in and is recorded for the others (see
 ## Requirements
 
 - macOS or Linux with `make`, a C compiler and Python 3.
-- A checkout of [F030Arcade](https://github.com/AnimaInCorpore/F030Arcade)
-  next to this one (`../F030Arcade`): its `third_party/` provides vasm,
-  vlink, the DSP56000 assembler, TOS 4.04 and the patched Hatari that every
-  run, screenshot and measurement uses.
+- The tools in `../F030Arcade/third_party/`, where the Makefiles look for
+  them (F030Arcade's development tree is not public yet; the tools are):
+  - `vasm/vasmm68k_mot` and `vlink/vlink`: [vasm](https://github.com/Leffmann/vasm)
+    and [vlink](https://github.com/Leffmann/vlink);
+  - `asm56k/`: Motorola's DSP56000 assembler (`ASM56000.EXE`, `CLDLOD.EXE`,
+    `DOS4GW.EXE`, `ioequ.inc`), your own copy, run under
+    [DOSBox-X](https://dosbox-x.com/) (`tools/smkx/dsp_asm.py`);
+    [ASM56000](https://github.com/AnimaInCorpore/ASM56000) is a portable
+    reconstruction of it;
+  - `hatari/build/`: the patched Hatari that every run, screenshot and
+    measurement uses, [AnimaInCorpore/hatari](https://github.com/AnimaInCorpore/hatari);
+  - `tos/tos404.img`: a TOS 4.04 image, your own (it is Atari's and not
+    distributed here).
 - An m68k-atari-mintelf cross toolchain in `../cross-mint/bin/` (or set
   `CROSS_CC`), for the C parts of the runtime.
 - The submodules: `git submodule update --init`.
