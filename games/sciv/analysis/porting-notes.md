@@ -3350,3 +3350,92 @@ was not exercised here.
 NatFeats opcodes ($7300/$7301) left in `falcon/`: `smkx_rt.s` (`nf_id`/`nf_call`, now guarded by the probe) and the
 stand-alone test programs `planbench.s`, `m7test.s`, `pputest.s`, `lcdtest.s`, `tcbench.s`, `tctest.s`, which are
 emulator-only tools and stay unguarded.
+
+## From F030CT, 2026-10-06: the render context runs at once when the DSP idles
+
+Found in CT's VBL hook (`falcon/smkx_rt.s`, `rt_vbl`). The render context
+(CT's render thread: planning, uploads and the send in the game's idle time)
+got the CPU only at the game's idle marks or after `RWAIT` (3) VBLs, and a
+context waiting for the DSP was left out of that count. When the VBL's poll
+took the finished picture, the context's pending send, or the plan the poll
+had asked for, waited for an idle mark while the DSP idled. Recognised in
+the 200 Hz tick table ("SMKX dsp ticks"): "asked" and the render phases
+"held" (the game has the CPU) while the DSP has nothing in flight; CT's
+2026-09-27 table had 12% there. Fix: after its frame, the VBL switches to
+the render context at once when work is pending (`rt_rstate`), the context
+does not wait for the DSP (`smkx_render_waiting`) and `smkx_inflight` is
+0; otherwise the `RWAIT` count as before. A VBL over the render context
+still returns to the game, so the game keeps its frame. File:
+`falcon/smkx_rt.s` (`rt_vbl`, label `.now`).
+
+Result (attract demo, 12,000 frames, release build, `CTX_LC=0`, whole-frame
+DSP renderer; Hatari v2.6.1-devel Oct 1 2026, `build/src/hatari.exe`,
+SHA-256 `600ac868ea64c9deea6fa72731b9fded58b45fb930d607ecb43bc7d9109682cf`,
+emulated): pictures 1,227 -> 1,390 (+13%); per scene 9.1 -> 11.1 (Mode 7
+intro), 3.6 -> 6.3, 3.0 -> 4.7, 3.2 -> 3.9 pictures a second, each at 50
+game fps; game NMIs 10,025 -> 9,971 (-0.5%). Details: F030CT
+`analysis/ct.md`, "The render context at once when the DSP idles".
+Not yet in this copy: take over the `rt_vbl` change in `falcon/smkx_rt.s` (this copy has the render context and `RWAIT`).
+For this game: the gain is where the game runs without a per-frame idle mark while the DSP is idle; scenes that idle every frame gain less.
+
+## From F030CT, 2026-10-06: building and running natively on Windows
+
+Git for Windows' GNU make 4.4.1 (`/usr/bin/make` in this shell) hands its
+recipes none of the shell's exported environment: TMP, TEMP, DOSBOX and
+PYTHONHASHSEED all arrive empty. Recognised by the mingw64 cross gcc's
+"Cannot create temporary file in C:\WINDOWS\: Permission denied" (also
+with an MSYS-style TMPDIR) and dsp_asm's WinError 2 although DOSBOX was
+exported. Fix: pass them as make variables, which make does export
+(`scripts/make_win.sh` in CT wraps this: `CROSS_CC="m68k-atari-mintelf-gcc
+-pipe"`, DOSBOX, TMP, TEMP, PYTHONHASHSEED=0, PYTHONUTF8=1); `-pipe`
+keeps gcc off temporary files anyway. The ucrt64 vlink needs cygwin1.dll:
+F030Arcade's `third_party/vlink/vlink.exe` and `vasm/vasmm68k_mot.exe`
+(the Makefile defaults) work. `tools/smkx/__main__.py` re-executed itself
+with `os.execv` for PYTHONHASHSEED=0, which on Windows joins the arguments
+unquoted and split the ROM path at its space ("unrecognized arguments:
+(USA).zip"): replaced by `subprocess.call`. `tools/smkx/dsp_asm.py`:
+F030SCIV's DOSBOX/dosbox-staging discovery taken over, plus SDL dummy
+video/audio drivers in the environment. `scripts/run_smkx.py` on Windows:
+this Hatari takes no program path, so the program is staged as
+`AUTO\CTX.PRG` in `build/ctx/<tag>-drive` and that directory passed,
+`--debug-except none`, no command FIFO, and it stops its own Hatari PID
+after "Program termination" in the trace. Files: `scripts/make_win.sh`
+(new), `scripts/run_smkx.py`, `tools/smkx/__main__.py`,
+`tools/smkx/dsp_asm.py`. Not yet in this copy: take over the
+`__main__.py` execv fix and the run script's Windows launch; the
+`dsp_asm.py` change is F030SCIV's. Tooling only; no game behaviour.
+
+## From F030CT, 2026-10-06: profiling the DSP kernel by function inside a game run
+
+Method (any port, any kernel). Hatari's debugger has a DSP profiler, `dp`
+(`dp on`, `dp stats`, `dp symbols`, `dp cycles`, `dp save <file>`), which
+counts every instruction's cycles per P address and reports hardware time
+(cycles / 32 MHz) whatever speed the emulator runs at (F030Arcade's
+DEBUGGING.md). CT's `scripts/dsp_profile.py` drives it without a FIFO: a
+`--parse` script does `logfile`, `dspsymbols <file>` (labels and P addresses
+scraped from the Motorola listing: a label on its own line takes the next
+instruction's address; lines skipped by a false `if` are absent from the
+listing) and two `b VBL = N :trace :once :file <script>` breakpoints that
+turn it on and dump it; Hatari's VBL count is ~194 ahead of the runtime's
+`vbl` status field (the TOS boot), so map the scene's frames first. The
+driver stops its own Hatari PID once the saved profile exists, then sums the
+per-address cycles by label range, folding local labels (`_x`) into the
+global label before them (Hatari's own `dp symbols` counts only a symbol's
+first address). Files: `scripts/dsp_profile.py` (new in CT). Not yet in this
+copy: take it over when a per-function DSP profile is wanted; it needs only
+the listing and the program.
+
+What it found in CT's shared `ppu.asm` (whole-frame tile renderer, field
+scene, BG mode 1, 384 VBLs, 43 pictures, emulated): composition
+(`comp_group` and the sliver handlers, `merge`, `any_mask`, `slivers`) 28%,
+SSI output service (`tx_isr` and its vectors, `fill`, `gate`, `tx_start`,
+`room`) 22%, descriptors (`desc`, `layer_row`, `row`, `render`) 18%, sprites
+11%, waiting for the host's next command 11%, the row loop 5%. The transmit
+interrupt costs ~24 cycles a word (a long interrupt with the "sent" test);
+a fast interrupt cannot replace it because the reader must test whether the
+writer has reached the word (the DSP draws slower than the SSI drains): the
+output service is a fixed cost per word sent, and fewer words is the lever.
+In a BG mode 2 scene (CT's title) the offset-per-tile descriptors
+(`desc_opt`) alone took 21%. For this game: profile its own scenes before
+optimising; the shares shift with mode and sprite load, but the output
+service's cost per word is the same in every port that sends over the SSI.
