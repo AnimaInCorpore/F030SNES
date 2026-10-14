@@ -107,3 +107,9 @@ instruction comes from the ROM, placed and checked against the listing.
 Platform adapters (Videl output, the DSP Mode 7 and c2p path, input, the
 APU and DSP-1 models) are target code and are documented as such. The
 256×224 four-plane, 16-colour output remains the platform requirement.
+
+## Pictures
+
+`docs/preview.png`, `docs/hatari-rgb.png` and `docs/hatari-vga.png` show
+Super Mario Kart's graphics, © 1992 Nintendo. Super Mario Kart
+is a trademark of Nintendo.

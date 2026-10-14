@@ -34,6 +34,13 @@ The states are measured in the patched Hatari (see below); speed on a real
 Falcon has not been measured for most of them. Each game's `README.md`,
 `ROADMAP.md` and `analysis/` have the details.
 
+**Screenshots and trademarks.** The pictures in `games/smk/docs/` show Super
+Mario Kart's graphics, © 1992 Nintendo. The game titles named here are
+trademarks of their owners: Nintendo (Super Mario Kart, Super Mario World,
+Yoshi's Island, Donkey Kong Country, Super Mario All-Stars), Square Enix
+(Chrono Trigger, Final Fantasy VI) and Konami (Super Castlevania IV). This
+project is not affiliated with or endorsed by any of them.
+
 ## Download
 
 Releases are packed with `make release VERSION=<v>` (see
