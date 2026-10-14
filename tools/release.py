@@ -109,7 +109,7 @@ def main():
                          games="\n".join(texts), sums="\n".join(sums) + "\n")
     (out / "README.TXT").write_bytes(text.replace("\n", "\r\n").encode("ascii"))
 
-    archive = out.with_suffix(".zip")
+    archive = out.parent / (name + ".zip")
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         for f in sorted(out.iterdir()):
             z.write(f, "%s/%s" % (name, f.name))
