@@ -1,0 +1,325 @@
+/* Host model of the DSP graphics orchestrator (analysis/list-compositor-sciv.md).
+ *
+ * What the DSP decides, from what the runtime can tell it (VRAM written, OAM, registers, scroll) and
+ * nothing else: which 16-pixel plane groups of the page each frame has to be written, in a scroll ring
+ * with two pages. The content of a written group here comes from the reference renderer (colour math off,
+ * the window extended by 16 pixels each side through shifted renders): composing is a separate question
+ * (the DSP's group composer). What this model proves is the orchestration: after the stores, the shown
+ * page equals the reference picture on every frame, and how many groups that took.
+ *
+ *   lcd_model rom.sfc SNAP.BIN...        consecutive frames, oldest first (SMW snapshots in CT's layout)
+ *
+ * The list the walker would get per frame: STORE (ring row, group, 16 pixels) for every group the frame
+ * composes and COPY (ring row, group) for every group the other page missed: its last frame's groups.
+ *
+ * Covered frames: BG mode 0 or 1 with 8x8 tiles, including windows, non-ring horizontal-scroll effects
+ * and bottom forced-blank rows. Unsupported frames use the exact renderer, the
+ * pages are invalid afterwards and the next covered frame starts cold.
+ */
+#define main lc_model_main
+#include "lc_model.c"
+#undef main
+#undef LC_RH
+#include "lc_plan.h"
+
+#define RH LC_RH
+#define NGR LC_NGR
+#define N LC_N
+#define DUP LC_DUP
+#define WINW LC_WINW
+
+static uint8_t page[2][N + DUP][16];   /* the two pages: 16 CGRAM indices a group (planar on the Falcon) */
+static LcPlan plan;
+
+typedef struct { int ok; uint8_t F[PPU_H][PPU_W], EL[PPU_H][16], ER[PPU_H][16]; } LFrame;
+
+/* F with colour math off: CGADSUB cleared in the shadow and in the IRQ log. */
+static void render_nomath(const Snap *s, int dx, uint8_t *out)
+{
+    Snap *t = snap_clone(s);
+    if (!plan.color) t->io[0x2131 - 0x2000] = 0;
+    for (int i = 0; i < t->nlog; i++)
+        if (!plan.color && t->log[i].reg == 0x2131) t->log[i].value = 0;
+    if (dx) {
+        /* sprites move with the picture: x + dx, 9 bits */
+        for (int seg = -1; seg < t->noamseg; seg++) {
+            uint8_t *oam = seg < 0 ? t->oam : t->oamseg[seg].oam;
+            for (int i = 0; i < 128; i++) {
+                int hi = (oam[512 + (i >> 2)] >> ((i & 3) * 2)) & 3;
+                int x = oam[i * 4] | ((hi & 1) << 8);
+                x = (x + dx) & 0x1FF;
+                oam[i * 4] = (uint8_t)x;
+                oam[512 + (i >> 2)] = (uint8_t)((oam[512 + (i >> 2)] & ~(1 << ((i & 3) * 2))) | ((x >> 8) << ((i & 3) * 2)));
+            }
+        }
+    }
+    PpuInput in = snap_input(t, t->io);
+    ppu_replay_dx = dx;                 /* every BG's horizontal scroll less dx, the HDMA's too */
+    ppu_render(&in, out);
+    ppu_replay_dx = 0;
+    free(t);
+}
+
+static void frame_renders(const Snap *s, LFrame *f)
+{
+    static uint8_t l[PPU_H][PPU_W], r[PPU_H][PPU_W];
+    render_nomath(s, 0, &f->F[0][0]);
+    render_nomath(s, 16, &l[0][0]);
+    render_nomath(s, -16, &r[0][0]);
+    for (int y = 0; y < PPU_H; y++) {
+        memcpy(f->EL[y], l[y], 16);             /* original x -16..-1 are shifted x 0..15 */
+        memcpy(f->ER[y], r[y] + 240, 16);       /* original x 256..271 are shifted x 240..255 */
+    }
+}
+
+
+/* The walker's list for one frame. */
+typedef struct { int L; uint8_t px[16]; } Store;
+static Store stores[N];
+static int nstores;
+static FILE *rec;
+
+static void c2p_group(const uint8_t *px, uint16_t *w)
+{
+    for (int b = 0; b < 8; b++) {
+        uint16_t v = 0;
+        for (int k = 0; k < 16; k++) v |= (uint16_t)(((px[k] >> b) & 1) << (15 - k));
+        w[b] = v;
+    }
+}
+
+static void put16(uint16_t v) { fputc(v >> 8, rec); fputc(v & 255, rec); }
+static void put32(uint32_t v) { put16((uint16_t)(v >> 16)); put16((uint16_t)v); }
+
+static uint32_t window_sum(int p, int S, int dl)
+{
+    uint32_t sum = 0;
+    for (int y = 0; y < PPU_H; y++)
+        for (int j = 0; j < (dl ? WINW : WINW - 1); j++) {
+            uint16_t w[8];
+            c2p_group(page[p][S + y * NGR + j], w);
+            for (int b = 0; b < 8; b++) sum = (sum << 1 | sum >> 31) + w[b];
+        }
+    return sum;
+}
+
+static const Snap *dbg_cur, *dbg_prev;
+static Snap *dbg_prev_owner;
+
+static void dbg_layers(const Snap *sn, int x, int y, const char *tag)
+{
+    static uint8_t buf[PPU_H][PPU_W];
+    for (int m = 0; m < 5; m++) {
+        Snap *t = snap_clone(sn);
+        t->io[0x2131 - 0x2000] = 0;
+        t->io[0x12C] = sn->io[0x12C] & (1 << m);
+        PpuInput in = snap_input(t, t->io);
+        ppu_render(&in, &buf[0][0]);
+        fprintf(stderr, "   %s layer %d only: %d\n", tag, m, buf[y][x]);
+        free(t);
+    }
+}
+
+static const uint8_t *lcd_cgram;
+static int plan_inidisp;
+
+/* One covered frame: the plan's groups composed from the reference, the copies, the check. */
+static void execute(const LFrame *f, int parity, int *bad)
+{
+    int p = parity, q = parity ^ 1;
+    int x0 = plan.wx >> 4, wx = plan.wx, dl = plan.dl;
+    nstores = 0;
+    for (int y = 0; y < PPU_H; y++)
+        for (int j = 0; j < WINW; j++) {
+            int on = j < 16 ? (plan.maskA[y] >> j) & 1 : plan.maskB[y] & 1;
+            if (!on) continue;
+            int L = (plan.S + y * NGR + j) & (N - 1);
+            Store *sp = &stores[nstores++];
+            sp->L = L;
+            for (int k = 0; k < 16; k++) {
+                int xs = 16 * (x0 + j) + k - wx;
+                uint8_t v = 0;
+                if (xs < 0) v = xs >= -16 ? f->EL[y][xs + 16] : 0;
+                else if (xs < 256) v = f->F[y][xs];
+                else v = xs < 272 ? f->ER[y][xs - 256] : 0;
+                sp->px[k] = v;
+            }
+            memcpy(page[p][L], sp->px, 16);
+            if (L < DUP) memcpy(page[p][L + N], sp->px, 16);
+        }
+    for (int i = 0; i < plan.ncopies; i++) {
+        int L = plan.copies[i];
+        memcpy(page[p][L], page[q][L], 16);
+        if (L < DUP) memcpy(page[p][L + N], page[q][L + N], 16);
+    }
+    if (getenv("LCD_TRACE")) { int tx, ty; sscanf(getenv("LCD_TRACE"), "%d,%d", &tx, &ty); int jj = (tx + dl) >> 4, in_a = jj < 16 ? (plan.maskA[ty] >> jj) & 1 : plan.maskB[ty] & 1; printf("trace ref %d page %d composed %d dl %d wx %d\n", f->F[ty][tx], page[p][plan.S + ty * NGR + jj][(tx + dl) & 15], in_a, dl, plan.wx);
+        if (getenv("LCD_TRACEW")) { int wxp = atoi(getenv("LCD_TRACEW")); int j2 = (wxp >> 4) - (plan.wx >> 4); if (j2 >= 0 && j2 < 17) printf("  world %d: j %d composed %d page %d (screen x %d)\n", wxp, j2, j2 < 16 ? (plan.maskA[ty] >> j2) & 1 : plan.maskB[ty] & 1, page[p][plan.S + ty * NGR + j2][wxp & 15], wxp - plan.wx); } }
+    int b = 0;
+    for (int y = 0; y < PPU_H; y++)
+        for (int x = 0; x < PPU_W; x++)
+        {
+            int bad1 = page[p][plan.S + y * NGR + ((x + dl) >> 4)][(x + dl) & 15] != f->F[y][x];
+            if (bad1 && getenv("LCD_BAD")) fprintf(stderr, "bad pixel x %d y %d dl %d maskB %d maskA %04x: page %d ref %d\n", x, y, dl, plan.maskB[y], plan.maskA[y], page[p][plan.S + y * NGR + ((x + dl) >> 4)][(x + dl) & 15], f->F[y][x]);
+            if (bad1 && getenv("LCD_BAD") && dbg_cur) { dbg_layers(dbg_cur, x, y, "cur"); if (dbg_prev) dbg_layers(dbg_prev, x, y, "prev"); }
+            b += bad1;
+        }
+    *bad = b;
+    if (rec) {
+        /* the Videl palette: CGRAM scaled by INIDISP brightness, as smkx_video.c make_clut, sent when it changed */
+        static uint32_t last_pal[256];
+        static int have_pal;
+        uint32_t pal[256];
+        int bright = plan_inidisp & 15;
+        for (int i = 0; i < 256; i++) {
+            unsigned c = lcd_cgram[i * 2] | (lcd_cgram[i * 2 + 1] << 8);
+            uint32_t r = (c & 31) * 63 * bright / (31 * 15), g = ((c >> 5) & 31) * 63 * bright / (31 * 15),
+                     b = ((c >> 10) & 31) * 63 * bright / (31 * 15);
+            pal[i] = (r << 26) | (g << 18) | (b << 2);
+        }
+        if (!have_pal || memcmp(pal, last_pal, sizeof pal)) {
+            put16(3); put16(0);
+            for (int i = 0; i < 256; i++) put32(pal[i]);
+            memcpy(last_pal, pal, sizeof pal);
+            have_pal = 1;
+        }
+        put16(1); put16((uint16_t)nstores);
+        for (int i = 0; i < nstores; i++) {
+            uint16_t w[8];
+            put16((uint16_t)stores[i].L);
+            c2p_group(stores[i].px, w);
+            for (int k = 0; k < 8; k++) put16(w[k]);
+        }
+        put16(2); put16((uint16_t)plan.ncopies);
+        for (int i = 0; i < plan.ncopies; i++) put16(plan.copies[i]);
+        put16(0); put16((uint16_t)plan.S); put16((uint16_t)dl); put32(window_sum(p, plan.S, dl));
+    }
+}
+
+
+/* Blocks the walker would issue for a plan (the logic of src/smkx_lc.c walk() and copy_groups(): runs of set bits of a row's mask,
+ * rows with the same mask merged into bands). Counts what direct DMA into the page would need: blocks, rows (one strided record
+ * each when the DMA cannot stride), groups. LCD_RUNS=1 prints per frame. */
+typedef struct { long blocks, rows, groups; } RunStat;
+static void count_runs(const uint32_t *mask, RunStat *st)
+{
+    int y = 0;
+    while (y < PPU_H) {
+        uint32_t m = mask[y];
+        if (!m) { y++; continue; }
+        int h = 1;
+        while (y + h < PPU_H && mask[y + h] == m) h++;
+        for (int j = 0; m >> j;) {
+            if (!((m >> j) & 1)) { j++; continue; }
+            int len = 0;
+            while ((m >> (j + len)) & 1) len++;
+            st->blocks++; st->rows += h; st->groups += (long)len * h;
+            j += len;
+        }
+        y += h;
+    }
+}
+
+#ifndef LCD_NO_MAIN                     /* tools/lc/lcd_fuzz.c includes this file for its model */
+int main(int argc, char **argv)
+{
+    if (argc < 3) {
+        fprintf(stderr, "usage: %s rom.sfc SNAP.BIN...   (LCD_REC=file writes the walker's stream)\n", argv[0]);
+        return 2;
+    }
+    long n;
+    const uint8_t *rom = load(argv[1], &n);
+    smw_rules = getenv("LC_SMW") != NULL;
+    lc_refuse_math = getenv("LC_REFUSE_MATH") != NULL;
+    lc_split_ring = getenv("LC_SPLIT") != NULL;                 /* HDMA splits keep the ring (lc_plan.c) */     /* frames with colour math are not covered */
+    ppu_init();
+    static LFrame fr;
+    int parity = 0, slow = 0, covered = 0, badframes = 0, totbad = 0, nfull = 0, frames_out = 0;
+    long tcomp = 0, tcopy = 0, maxcomp = 0;
+    RunStat tw = {0}, tc = {0};
+    int rframes = 0;
+    long trows = 0;
+    if (getenv("LCD_REC")) {
+        rec = fopen(getenv("LCD_REC"), "wb");
+        fwrite("LCW1", 1, 4, rec);
+        put32(0);                      /* frames, patched at the end */
+        put32(N);
+        put32(DUP);
+    }
+    printf("frame          comp  copy  bad  note\n");
+    for (int a = 2; a < argc; a++) {
+        Snap *s = snap_load(argv[a], rom);
+        PpuInput in = snap_input(s, s->io);
+        if (lc_plan(&in, &plan, NULL) != 0) {
+            printf("%-12s   slow (why %02x)\n", s->name, lc_why);
+            slow++;
+            free(s);
+            continue;
+        }
+        dbg_cur = s;
+        lcd_cgram = s->cgram;
+        plan_inidisp = s->io[0x100];
+        frame_renders(s, &fr);
+        if (getenv("LCD_PPM") && covered + 1 == atoi(getenv("LCD_PPM"))) {       /* the reference picture of one frame */
+            FILE *pf = fopen(getenv("LCD_PPM_FILE"), "wb");
+            int bright = plan_inidisp & 15;
+            fprintf(pf, "P6\n%d %d\n255\n", PPU_W, PPU_H);
+            for (int y = 0; y < PPU_H; y++)
+                for (int x = 0; x < PPU_W; x++) {
+                    unsigned c = lcd_cgram[fr.F[y][x] * 2] | (lcd_cgram[fr.F[y][x] * 2 + 1] << 8);
+                    for (int k = 0; k < 3; k++) {
+                        int v6 = ((c >> (5 * k)) & 31) * 63 * bright / (31 * 15);
+                        fputc(v6 << 2 | v6 >> 4, pf);
+                    }
+                }
+            fclose(pf);
+        }
+        int bad;
+        execute(&fr, parity, &bad);
+        parity ^= 1;
+        covered++;
+        frames_out++;
+        totbad += bad;
+        badframes += bad != 0;
+        {
+            uint32_t ma[PPU_H], mb[PPU_H];
+            RunStat w = {0}, c = {0};
+            for (int y = 0; y < PPU_H; y++) { ma[y] = plan.maskA[y]; mb[y] = plan.maskB[y]; }
+            count_runs(ma, &w); count_runs(mb, &w); count_runs(plan.cmask, &c);
+            if (!plan.cold) {
+                rframes++;
+                for (int y = 0; y < PPU_H; y++) trows += (ma[y] | mb[y]) != 0;
+                tw.blocks += w.blocks; tw.rows += w.rows; tw.groups += w.groups;
+                tc.blocks += c.blocks; tc.rows += c.rows; tc.groups += c.groups;
+            }
+            if (getenv("LCD_RUNS"))
+                printf("  runs: walk %ld blocks %ld rows %ld groups; copy %ld blocks %ld rows %ld groups%s\n", w.blocks, w.rows,
+                       w.groups, c.blocks, c.rows, c.groups, plan.cold ? " (cold)" : "");
+        }
+        tcomp += plan.ngroups;
+        tcopy += plan.ncopies;
+        if (plan.ngroups > maxcomp) maxcomp = plan.ngroups;
+        if (plan.cold) nfull++;
+        printf("%-12s %5d %5d %5d  %s%s S %d dl %d wx %d wy %d\n", s->name, plan.ngroups, plan.ncopies, bad, plan.cold ? "cold" : "", plan.fixed ? (lc_fixed_why == 1 ? " fixed:m7" : lc_fixed_why == 2 ? " fixed:math" : lc_fixed_why == 3 ? " fixed:reg" : lc_fixed_why == 4 ? " fixed:vscroll" : " fixed") : "",
+               plan.S, plan.dl, plan.wx, plan.wy);
+        if (dbg_prev_owner) free(dbg_prev_owner);
+        dbg_prev_owner = s;
+        dbg_prev = s;
+    }
+    if (rec) {
+        fseek(rec, 4, SEEK_SET);
+        put32((uint32_t)frames_out);
+        fclose(rec);
+    }
+    printf("%d covered, %d slow; %d cold starts; mean per frame: %ld groups composed, %ld copied; max %ld;"
+           " %d frames wrong, %d wrong pixels\n",
+           covered, slow, nfull, covered ? tcomp / covered : 0, covered ? tcopy / covered : 0, maxcomp, badframes,
+           totbad);
+    if (rframes)
+        printf("rows touched per warm frame: %ld\n", trows / rframes);
+    if (rframes)
+        printf("warm frames %d, mean per frame: walk %ld blocks / %ld rows / %ld groups; copy %ld blocks / %ld rows / %ld groups\n",
+               rframes, tw.blocks / rframes, tw.rows / rframes, tw.groups / rframes, tc.blocks / rframes, tc.rows / rframes,
+               tc.groups / rframes);
+    return badframes != 0;
+}
+#endif

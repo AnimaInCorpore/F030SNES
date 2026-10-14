@@ -1,0 +1,21 @@
+[submodule "games/ct/third_party/ct_disassembly"]
+	path = games/ct/third_party/ct_disassembly
+	url = https://github.com/dscotton/ct_disassembly
+[submodule "games/dkc/third_party/Donkey-Kong-Country-1-Disassembly"]
+	path = games/dkc/third_party/Donkey-Kong-Country-1-Disassembly
+	url = https://github.com/Yoshifanatic1/Donkey-Kong-Country-1-Disassembly
+[submodule "games/ff6/third_party/ff6"]
+	path = games/ff6/third_party/ff6
+	url = https://github.com/everything8215/ff6
+[submodule "games/smas/third_party/SMW-SMAS-SMASW-Disassembly"]
+	path = games/smas/third_party/SMW-SMAS-SMASW-Disassembly
+	url = https://github.com/Yoshifanatic1/SMW-SMAS-SMASW-Disassembly
+[submodule "games/smk/third_party/Super-Mario-Kart-Disassembly"]
+	path = games/smk/third_party/Super-Mario-Kart-Disassembly
+	url = https://github.com/Yoshifanatic1/Super-Mario-Kart-Disassembly
+[submodule "games/smw/third_party/SMWDisX"]
+	path = games/smw/third_party/SMWDisX
+	url = https://github.com/IsoFrieze/SMWDisX
+[submodule "games/smw2/third_party/Yoshi-s-Island-Disassembly"]
+	path = games/smw2/third_party/Yoshi-s-Island-Disassembly
+	url = https://github.com/Yoshifanatic1/Yoshi-s-Island-Disassembly

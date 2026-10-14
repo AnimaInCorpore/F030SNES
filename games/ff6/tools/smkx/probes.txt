@@ -1,0 +1,26 @@
+# 65816 addresses that report once, with the frame number, when first run.
+$C00019   # Reset (the vector's JML target, src/field/reset.asm)
+$C0007F   # FieldMain
+$C0BDF1   # LoadMap
+$C00397   # LoadWorldMap
+$C0C506   # CheckMenu (the field's menu request)
+$C2000C   # BattleMain
+$EE04AB   # WorldMain
+$EE024B   # VehicleMain
+$C26828   # DecompCutsceneProg (title, opening credits, floating continent, World of Ruin)
+$7E500C   # TitleMain (in the cutscene program at $7E5000)
+$C00573   # InitInterrupts (stores the field's NMI/IRQ jumps at $1500/$1504)
+$C00182   # FieldNMI
+$C00262   # FieldIRQ
+$7E502C   # InitCutscene
+$7E507C   # InitTitle
+$7E50A5   # TitleLoop
+$7E7189   # WaitVBlank (the cutscene program's frame wait)
+$C50004   # ExecSound_ext (a sound command for the SPC700)
+$7E57A7   # OpeningMain (the Magitek march and credits, in the cutscene program)
+$7E5826   # OpeningLoop
+$7E5A00   # OpeningState_01
+$7E5A1A   # OpeningState_02
+$7E5A24   # OpeningState_03
+$7E5C96   # CreditsTextTask
+$C0BDF1   # LoadMap (again: reported once)

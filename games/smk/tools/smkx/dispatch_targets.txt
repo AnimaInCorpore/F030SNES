@@ -1,0 +1,49 @@
+# Dispatch targets the listing does not mark as address-taken: raw words in
+# data tables, reached through JSR/JMP (!ContextDependentTable,x).
+# One $BBAAAA per line.
+
+# Object scripts at $80F6DB-$80F744 (DATA_80F6DB..DATA_80F703), run by
+# CODE_80F879: routine words among pointers to further script cells.
+$80F897
+$80F745		# the RTS the listing labels CODE_80F703
+$80F851
+$80F86C
+$80F746
+$80F77A
+$80F78C
+$80F7B0
+$80F7F1
+$80FDBC
+$80F82D
+$80F7C9
+$80F7DE
+
+# Frame-step scripts in bank $81 (DATA_81891B, DATA_81892D, DATA_8189E5):
+# a bank-$81 routine word followed by a raw bank-$80 word.
+$80BA61
+$80BA67
+$80BA71
+
+# Object-script handlers in bank $85, called through JSR ($0000,x) at
+# CODE_85E0C0. The listing keeps them inside DATA_85DA00 as byte-swapped
+# dw words ($85DD74-$85DF8D); the scripts at $85DC00-$85DD73 name them.
+$85DC44		# a handler inside the scripts themselves (after $DDEF at $85DC3E)
+$85DD74
+$85DD82
+$85DDA0
+$85DDC7
+$85DDEF
+$85DE30
+$85DE3A
+$85DE4A
+$85DE59
+$85DE68
+$85DE77
+$85DE8D
+$85DE94
+$85DEBB
+$85DECB
+$85DEDF
+$85DEEF
+$85DF47
+$85DF4A

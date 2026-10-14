@@ -1,0 +1,26 @@
+# Interrupt handlers the engines install as `JML handler` at $001500 (NMI) and
+# $001504 (IRQ); the ROM vectors jump there (`JML $001500` at $C0FF10, `JML
+# $001504` at $C0FF14, see analyze.wram_trampoline). One $BBAAAA per line,
+# found from the installers' `LDX #near X : STX $1501 : LDA #^X : STA $1503`
+# (and $1505/$1507) pairs; the labels are the disassembly's (third_party/ff6).
+$C00182   # FieldNMI (field, reset.asm InitInterrupts)
+$C00262   # FieldIRQ
+$C10B8A   # BattleNMI (btlgfx/interrupt_2.asm)
+$C10D2D   # BattleIRQ
+$C313F2   # MenuNMI (menu_common.asm)
+$C31432   # MenuIRQ
+$EEA71F   # WorldNMI (world/init.asm)
+$EEA931   # WorldIRQ
+$EEA944   # TrainNMI
+$EEAA2C   # TrainIRQ
+$EEA500   # VehicleNMI (airship, chocobo)
+$EEA6AE   # AirshipIRQ
+$EEA6C6   # ChocoIRQ
+$EEA6FE   # VectorApproachIRQ (world/cutscene.asm)
+$EEAB44   # EndingAirshipSceneNMI
+$E5FCDF   # TheEndNMI (cutscene/the_end.asm, in ROM)
+$E5FE15   # TheEndIRQ
+$7E71BF   # CutsceneNMI (cutscene/title.asm, in the WRAM program at $7E5000)
+$7E71F0   # CutsceneIRQ
+# Not stored anywhere in the game as a handler: the $6B (RTL) stub btlgfx/main.asm
+# writes at $1500/$1504 while interrupts are off.

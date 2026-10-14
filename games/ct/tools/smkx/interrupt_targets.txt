@@ -1,0 +1,19 @@
+# Interrupt handlers the engines install as `JML handler` at $000500 (NMI)
+# and $000504 (IRQ); the ROM vectors jump there (see analyze.wram_trampoline).
+# One $BBAAAA per line, found from the installers' LDX #/STX $0501/$0505
+# and LDA #bank/STA $0503/$0507 pairs.
+$FDDE15   # boot NMI (Boot_InstallVectors)
+$FDDE87   # boot IRQ
+$C0EA63   # field NMI (Field_InstallNmiVector)
+$C0ECCC   # field IRQ (Field_InstallIrqVector)
+$C2015E   # menu NMI (Menu_InstallInterruptVectors)
+$C20345   # menu IRQ
+$C30548   # C3 engine NMI
+$C30529   # C3 engine IRQ
+$C308C9   # C3 NMI, second stage
+$C308B3   # C3 NMI, third stage
+$D1E77C   # D1 engine NMI
+$D1FE97   # D1 engine IRQ
+$D1F4C0   # battle NMI, set by the CD battle loop
+$C2840E   # menu NMI (the menu copies JML stubs from $C28406)
+$C28472   # menu IRQ (RTI)

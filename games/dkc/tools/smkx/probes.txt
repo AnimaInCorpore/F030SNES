@@ -1,0 +1,2 @@
+# 65816 addresses that report once, with the frame number, when first run.
+# One $BBAAAA per line. (DKCX_DUMP_PC dumps at the n-th execution of one of them.)

@@ -1,0 +1,8 @@
+# Instructions whose `dp,x` / `dp,y` index is a full 16-bit address (D = 0 and X
+# up to $FFFF: the registers, ROM or WRAM): resolved at run time (emit.py).
+# One $BBAAAA per line.
+$008293   # sub_008263: DMA/HDMA channel registers, X = $43x0 from the table at ($805A,x)
+$008298
+$00829D
+$0082A2
+$0082A7

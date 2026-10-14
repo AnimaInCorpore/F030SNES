@@ -1,0 +1,6 @@
+# Native routines: at this address the translation calls rt_native_<name>
+# (falcon/ct_*.s), which either does the whole 65816 routine and continues
+# at the context's RTL, or declines and the translated routine runs.
+# One "$BBAAAA $RRRRRR name" per line: the entry, the routine's RTL, the name.
+# Gfx_DecompressEntry: the LZ decompressor (falcon/ct_lz.s).
+$C30557 $C308B2 lz

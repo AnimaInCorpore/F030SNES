@@ -1,0 +1,6 @@
+build/
+out/
+assets/*.zip
+assets/*.bin
+.DS_Store
+__pycache__/

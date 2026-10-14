@@ -1,0 +1,34 @@
+# Dispatch targets the listing does not mark as address-taken: raw words in
+# data tables, reached through JSR/JMP (!ContextDependentTable,x).
+# One $BBAAAA per line.
+
+# Per-site target lists ("$SITE: $T1 $T2 ..."): a dispatch the listing gives
+# no table for, or whose table the analysis cannot find.
+# CheckBattleEnd ($C247E0): JMP (BattleEndTbl-2,X), X = 2 * the special event
+# number (1-6), so the table starts one word after the operand.
+$C247E0: $C2487F $C248C8 $C248D8 $C24889 $C248D3 $C24A0A   # BattleEnd_01 .. _06
+
+# ExecTasks ($C3126E): the code pointers given to CreateTask / InitTask
+# (scripts/ff6x_menu_tasks.py).
+$C3126E: $C30882 $C30956 $C309CC $C30B7D $C31048 $C31A30 $C32FDD $C3305B
+$C3126E: $C3369C $C336E7 $C33A54 $C36FCA $C3702C $C381AD $C381F3 $C382C9
+$C3126E: $C38904 $C3A5EB $C3B151 $C3BC12 $C3C312 $C3C357 $C3D09C $C3D1AE
+$C3126E: $C3D5F3 $C3D91A $C3DA1D $C3DA2B $C3DAE3 $C3DB41 $C3DBF4 $C3DD68
+$C3126E: $C3DF1E $C3DF7C $C3E02C $C3E076 $C3E0A6 $C3E13A $C3E150 $C3E181
+$C3126E: $C3E1C3 $C3E22D $C3E71E $C3E730 $C3E77E $C3E7AE $C3E7FC $C3E84A
+$C3126E: $C3E898 $C3EB94 $C3EDD4 $C3EDFB $C3EE2D $C3EF3C $C3F3D9 $C3FA36
+$C3126E: $C3FB82 $C3FBE8 $C3FC4E $C3FC73 $C3FD3E
+
+# UpdateSpriteAnim ($EE43C7): JSR (UpdateSpriteAnimTbl,X). The table's first word is `.addr 0`,
+# "no animation", which the loop skips (LDA $CA,X : BEQ) before it dispatches; as a
+# target it would be the start of the bank, code that returns in other widths.
+$EE43C7: $EE4409 $EE4600 $EE4688 $EE49FE $EE4B51 $EE4BB4 $EE4C55 $EE4CBC
+$EE43C7: $EE4D2E $EE4DE2 $EE4F10 $EE4A87 $EE4ACE $EE4F20 $EE4F63 $EE51BB
+$EE43C7: $EE520B $EE534E $EE538E $EE50D0 $EE53D6 $EE5407 $EE5529 $EE557E
+$EE43C7: $EE570B
+
+# The cutscene program's task scheduler ($7E74E8, `JMP ($1B)`): the code pointers given
+# to CreateTask (scripts/ff6x_overlay_tasks.py).
+$7E74E8: $7E5323 $7E5379 $7E53E5 $7E5463 $7E54ED $7E5554 $7E557C $7E56AD
+$7E74E8: $7E5A46 $7E5AA1 $7E5C7A $7E5C96 $7E5ED2 $7E5F29 $7E5F6B $7E6AA4
+$7E74E8: $7E6B18 $7E6E16 $7E6E89 $7E6FE6 $7E72E6 $7E7667

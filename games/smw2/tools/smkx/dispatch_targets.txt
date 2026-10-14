@@ -1,0 +1,3 @@
+# Dispatch targets the listing does not mark as address-taken: raw words in
+# data tables, reached through JSR/JMP (!ContextDependentTable,x).
+# One $BBAAAA per line.

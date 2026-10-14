@@ -1,0 +1,10 @@
+# Jump table lengths the listing cannot tell (tools/smkx/analyze.py,
+# TABLE_LENGTHS): "$BBAAAA count" per line, the table's address in the
+# bank of the JSR/JMP (abs,X) that uses it. scripts/table_audit.py lists
+# tables read shorter than the ROM suggests; enter checked ones here.
+# Checked (2026-09-25): the audit's ROM run reaches into code or into
+# DATA_81F8AD's bytes ($D418 ...), the reader itself reads these fully.
+$818F6B 7	# JMP ($818F6B,X), X = $B6; CODE_818F79 follows
+$81F88B 3	# JMP ($81F88B,X), X = $2E
+$81F891 7	# JMP ($81F891,X), X = $A6
+$81F89F 7	# JMP ($81F89F,X), X = $A4; DATA_81F8AD (db) follows

@@ -1,0 +1,9 @@
+# Dispatch targets the listing does not mark as address-taken: raw words in
+# data tables, reached through JSR/JMP (!ContextDependentTable,x).
+# One $BBAAAA per line.
+
+# Per-site target lists ("$SITE: $T1 $T2 ..."): a dispatch the listing gives
+# no table for, or whose table the analysis cannot find.
+# CheckBattleEnd ($C247E0): JMP (BattleEndTbl-2,X), X = 2 * the special event
+# number (1-6), so the table starts one word after the operand.
+# Super Castlevania IV: empty until the program is analysed (ROADMAP.md).

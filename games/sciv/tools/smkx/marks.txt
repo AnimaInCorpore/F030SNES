@@ -1,0 +1,12 @@
+# Timing marks: the translated code calls rt_mark_<name> (preserving every
+# register and the CCR) before the instruction at this address.
+# One "$BBAAAA name" per line; the runtime defines the hooks.
+# FF6: idle marks for the frame waits found so far. Still wanted (ROADMAP.md,
+# "input timing and speed"): main_start / main_end around the field loop
+# (FieldLoop, $C00085) and the idle points of the world map ($24 polls in
+# src/world) and the battle proper.
+# Idle points: where the game waits for its next frame, so the runtime runs
+# the render work there (rt_mark_idle, falcon/smkx_rt.s) until the next VBL,
+# and gives the game its NMI once per pass (SMKX_SYNC).
+# Super Castlevania IV: empty until the program is analysed (ROADMAP.md).
+$008550 idle   # WaitNMI (sub_008543): `lda $003C : bmi` until the NMI clears the $80 it set

@@ -1,0 +1,31 @@
+# Timing marks: the translated code calls rt_mark_<name> (preserving every
+# register and the CCR) before the instruction at this address.
+# One "$BBAAAA name" per line; the runtime defines the hooks.
+# The menu shell's scheduler pass: after its wait for the frame flag
+# ($0D01) until it has run all eight task slots and restarts (a "game
+# frame" of the menu).
+$C281CF main_start
+$C281B9 main_end
+# The field's main loop (Field_MainLoop): from the top of an iteration to
+# its call of Field_WaitVblank, which spins until the NMI (one iteration
+# per game frame, counted in $0158).
+$C00097 main_start
+$C000BA main_end
+# Idle points: where the game waits for the next frame, the runtime runs
+# the render work (rt_mark_idle, falcon/smkx_rt.s) until the next VBL.
+# Field_WaitVblank's spin (LDA $0152 : BNE), the menu shell's wait for its
+# frame flag (LDA $0D01 : BEQ), the intro program's loop (JSR $3176, a bare
+# RTS : LDA $00 : BEQ).
+$C0EC71 idle
+$C281CA idle
+$7E3023 idle
+# The battle's wait for the next frame (BattleSys_PumpFrames: INC $9E,
+# then JSL BattleSys_TickVector : LDA $9E : BNE until the NMI clears it).
+$C10084 idle
+# BattleSys_WaitScanline's latch of the V counter (LDA $2137): the
+# runtime moves the counter to the line before the one waited for
+# (rt_mark_vwait), so the loop ends at its first pass.
+$CD3B9A vwait
+# Gfx_DecompressEntry's RTL: check builds (CTX_LZ_CHECK=1) compare the
+# translated routine's WRAM with the native one's (falcon/ct_lz.s).
+$C308B2 lzchk

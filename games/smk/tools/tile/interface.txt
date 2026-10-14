@@ -1,0 +1,10 @@
+smkx_tile_render
+smkx_tile_poll
+smkx_tile_active
+smkx_tile_stat
+smkx_clut8
+smkx_lc_active
+smkx_lc_window
+smkx_lc_stat
+smkx_ppu_stat
+lc_prof

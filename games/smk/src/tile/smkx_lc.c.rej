@@ -1,0 +1,107 @@
+@@ -37,9 +38,11 @@
+ typedef struct {
+     LcPlan plan;
+     int stage, kind, parity;
++    int kernel;                         /* the DSP program: DSP_KERNEL_LC, or DSP_KERNEL_LCW for frames with windows */
+     int na, nb;                         /* groups of the two renders */
+     uint32_t words_a, words_b;
+     uint16_t mask_b[PPU_H];
++    uint8_t cgram[512], inidisp;        /* the palette that goes with the picture */
+     uint16_t list[2][LIST_WORDS];
+ } Job;
+ 
+@@ -47,18 +50,25 @@
+ #define SMKX_LC_SYNC 0
+ #endif
+ #define NJOB 2
+-#define DEPTH (SMKX_LC_SYNC ? 1 : NJOB)
++static int depth = SMKX_LC_SYNC ? 1 : NJOB;   /* jobs queued at most: 1 while a snapshot's frame must be one instant */
++#define DEPTH depth
++
++void smkx_lc_set_depth(int d)
++{
++    depth = d < 1 ? 1 : d > NJOB ? NJOB : d;
++}
+ 
+ static Job jobs[NJOB];
+ static int head, nq;                /* the oldest job and how many are queued (jobs[(head + i) % NJOB]) */
+ static int next_parity;             /* the page the next drawing job draws into */
+ static int last_S, last_dl, have_last;   /* the window of the newest planned job */
++static uint8_t last_cgram[512], last_inidisp;   /* and its palette: a change alone makes a job */
+ static int fallback;                /* the newest frame is not covered: drain the queue, then let the caller draw */
+ static int shown = -1;              /* the page on display */
+ static int shown_S, shown_dl;
+ static int ready;                   /* the DSP runs the LC build */
+ 
+-uint32_t smkx_lc_stat[12];          /* frames shown, frames planned, cold, groups, copies, fallbacks, plan ticks, walk ticks; list, copy, window ticks */
++uint32_t smkx_lc_stat[16];          /* frames shown, frames planned, cold, groups, copies, fallbacks, plan ticks, walk ticks; list, copy, window ticks */
+ 
+ static void put_window(int p, int S, int dl)
+ {
+@@ -421,6 +427,7 @@
+ {
+     uint32_t t0 = prof_now();
+     put_window(j->kind == K_WINDOW ? (shown >= 0 ? shown : j->parity) : j->parity, j->plan.S, j->plan.dl);
++    smkx_set_palette(j->cgram, j->inidisp);
+     smkx_lc_stat[10] += prof_now() - t0;
+     smkx_lc_stat[0]++;
+ }
+@@ -510,20 +528,27 @@
+     Job *j = &jobs[(head + nq) % NJOB];
+     uint32_t t0 = prof_now();
+     int rc = lc_plan(&in, &j->plan, rt_plan_dirty);
+-    if (rc > 0) return 0;                       /* a forced-blank frame: not a picture, the shown one stays */
+-    if (rc < 0) return -1;
++    if (rc > 0) return 0;                       /* the NMI's blank: the picture stays */
++    if (rc < 0) {
++        smkx_lc_stat[11] = lc_why;              /* the last reason (lc_plan.c) */
++        return -1;
++    }
+     smkx_lc_stat[6] += prof_now() - t0;
+     smkx_lc_stat[1]++;
+     smkx_lc_stat[2] += j->plan.cold;
+     smkx_lc_stat[3] += (uint32_t)j->plan.ngroups;
+     smkx_lc_stat[4] += (uint32_t)j->plan.ncopies;
++    copy_bytes(j->cgram, in.cgram, 512);
++    j->inidisp = in.io[0x100];
++    int pal_changed = !have_last || j->inidisp != last_inidisp;
++    for (int i = 0; i < 512; i++) if (j->cgram[i] != last_cgram[i]) { pal_changed = 1; break; }
+     j->na = count_groups(j->plan.maskA);
+     j->nb = count_groups(j->plan.maskB);
+     j->stage = J_PLANNED;
+     if (j->na + j->nb == 0) {
+         if (j->plan.ncopies == 0) {
+             /* nothing to draw: the page holding the newest frame is the picture; only the window may have moved */
+-            if (have_last && last_S == j->plan.S && last_dl == j->plan.dl) return 0;
++            if (have_last && last_S == j->plan.S && last_dl == j->plan.dl && !pal_changed) return 0;
+             j->kind = K_WINDOW;
+             j->parity = next_parity ^ 1;
+         } else {
+@@ -564,10 +616,18 @@
+     last_S = j->plan.S;
+     last_dl = j->plan.dl;
+     have_last = 1;
++    copy_bytes(last_cgram, j->cgram, 512);
++    last_inidisp = j->inidisp;
+     nq++;
+     return 1;
+ }
+ 
++/* Moves the jobs on without planning a new one (the frame at hand is not a picture). */
++void smkx_lc_pump(void)
++{
++    if (ready) pump();
++}
++
+ /* Returns 1: a new picture is on the screen (the Videl points at it); 0: nothing new; -1: the frame is not one
+  * the list compositor draws (or the DSP did not answer): the caller draws it another way. */
+ int smkx_lc_render(const PpuInput *in)
+@@ -582,7 +642,7 @@
+         have_last = 0;
+         return -1;
+     }
+-    if (nq < DEPTH && !(SMKX_LC_SYNC && r)) {       /* (synchronous: the frame just shown is this call's) */
++    if (nq < DEPTH && !(depth == 1 && r)) {         /* (one job at a time: the frame just shown is this call's) */
+         int p = plan_job(in);
+         if (p < 0) {
+             fallback = 1;

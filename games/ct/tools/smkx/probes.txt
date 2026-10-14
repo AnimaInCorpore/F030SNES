@@ -1,0 +1,6 @@
+# 65816 addresses that report once, with the frame number, when first run.
+$FDC000   # Boot_Main
+$C00000   # Engine_EntryTable (field engine)
+$C0000E   # Field_ColdBootInit
+$C28000   # menu engine
+$C30002   # C3 engine

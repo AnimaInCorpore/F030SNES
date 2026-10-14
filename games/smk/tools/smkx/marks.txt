@@ -1,0 +1,10 @@
+# Timing marks: the translated code calls rt_mark_<name> (preserving every
+# register and the CCR) before the instruction at this address.
+# One "$BBAAAA name" per line; the runtime defines the hooks.
+
+# SMK's main loop (CODE_808056): the frame's work starts once the NMI has
+# set $44 (LDX $36 after the wait at $80805C) and ends back at the loop head.
+$808060 main_start
+$808056 main_end
+# The wait itself: SMKX_PACE runs the frame a VBL left due (falcon/smkx_rt.s).
+$80805C main_wait

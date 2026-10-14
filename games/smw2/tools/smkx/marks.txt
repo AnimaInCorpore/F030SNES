@@ -1,0 +1,3 @@
+# Timing marks: the translated code calls rt_mark_<name> (preserving every
+# register and the CCR) before the instruction at this address.
+# One "$BBAAAA name" per line; the runtime defines the hooks.

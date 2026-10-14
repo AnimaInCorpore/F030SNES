@@ -1,0 +1,37 @@
+# Jumps the analysis cannot resolve from the code alone, one site per line:
+#
+#   $SITE stack $TABLE unit [dbr]
+#       an RTS/RTL that "returns" to a table entry the routine pushed
+#       (entry minus one); unit 2: dw entries in the site's bank, 3: dl.
+#   $SITE ptr $TABLE unit [dbr]
+#       an indirect JMP/JSR through a pointer the code just loaded from
+#       this table; unit 2: dw entries in the site's bank, 3: dl.
+#   $SITE ptr $LO/$MID/$HI 1
+#       the same with the pointer's bytes in three db tables.
+#
+# "dbr": the entry's bank becomes the data bank (the routine pushes it for
+# PLB). Sites are found as "RTS/RTL with N bytes still pushed" and
+# "dispatch in widths ..." in build/yix/report.txt.
+
+$008169 stack $00816A 3 dbr   # CODE_008150: game mode routines (DATA_00816A)
+$008AE4 stack $0089CC 2       # CODE_008AD7: ambient sprite main routines (DATA_0089CC-$374,y)
+$039A58 stack $039A59 2       # CODE_039A51: sprite state routines (DATA_039A59-$02,y)
+$0FBF7F stack $0FBF80 2       # CODE_0FBF70: LDA DATA_0FBF80-$1A,y : PHA : RTS (the BEQ path returns)
+$039A8D ptr $038000 3 dbr     # sprite init routines: JMP [$7960], D = $7960
+$039AAD ptr $03852E 3 dbr     # sprite main routines
+$03A09E ptr $038A5C 3 dbr     # sprite stomp routines
+$03A1BB ptr $038F8A 3 dbr     # sprite ride-Yoshi routines
+$1191D6 ptr $1191D9 2         # CODE_1191C4: JMP ($0000)
+$118D9C ptr $118D9F 2         # CODE_118D8D: JMP ($0000)
+$0FBFB9 ptr $0FBACA 2         # CODE_0FBFA5: JMP ($7960) through DATA_0FBACA-$45E,y
+$10C4E0 ptr $10C4B3/$10C4B7/$10C4BB 1   # CODE_10C4CB: JMP [$0003]
+$06D573 ptr $06D577 2         # PER : JMP ($7960), a call
+$06DD81 ptr $06DD98 2         # PER : JMP ($7960); the table is DATA_08DD98 (a label typo for $06DD98)
+$06E67D ptr $06E627 2         # PER : JMP ($7960); code words alternate with $0001
+$11A190 ptr $11A193 2         # JMP ($0000)
+$11B37E ptr $11B381 2         # JMP ($7960)
+$11BC27 ptr $11BCE7 2         # PEA : JMP ($7960), a call
+$11C469 ptr $11C46C 2         # JMP ($7960)
+$01A6B6 ptr = $039A6C         # JMP [$7960] to CODE_039A6C (LDA #CODE_039A6C : STA $00)
+$05F1B8 ptr = $039A6C         # the same
+$07A893 ptr = $07A896,$07A8CC  # CODE_07A88F: JMP ($7960) through sprite variable $78,x (set to these two)

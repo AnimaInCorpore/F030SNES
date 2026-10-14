@@ -1,0 +1,189 @@
+/* Host check of the Falcon video adapter: renders the inputs saved in
+ * SNAP.BIN (format in src/snes_ppu.h) with the same C source the Falcon
+ * runs, and compares the resulting planes with the planes the Falcon wrote.
+ *
+ *   build/ppu_snap build/smkx/SNAP.BIN build/smkx/smk.sfc build/smkx/oklab555.bin
+ *
+ * Renders with the palette the Falcon used, compares the planes, then runs
+ * palette_update() on the host's own pixel counts and compares the result
+ * with the palette the Falcon produced. Prints slot use; exits non-zero on
+ * any difference.
+ *
+ * It also renders the frame a second time through a PpuM7Sink, filling the
+ * stage's pixels from ppu_m7_pixels(), and checks that the split path (the
+ * one the Falcon takes with the DSP) gives the same pixels and counts.
+ * An optional fourth argument writes the Falcon's frame as a PPM image. */
+#include "snes_ppu.h"
+#include "ppu_fast.h"
+#include "palette.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+static uint8_t *load(const char *path, long *size)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f) { perror(path); exit(2); }
+    fseek(f, 0, SEEK_END);
+    *size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    uint8_t *d = malloc((size_t)*size);
+    if (!d || fread(d, 1, (size_t)*size, f) != (size_t)*size) { perror(path); exit(2); }
+    fclose(f);
+    return d;
+}
+
+/* Host stand-in for the DSP: keeps each row's line. */
+static PpuM7Line rowline[PPU_H];
+static uint8_t rowext[PPU_H];
+static void host_m7_row(void *ctx, int row, const PpuM7Line *l) { (void)ctx; rowline[row] = *l; rowext[row] = 1; }
+static void host_cpu_row(void *ctx, int row) { (void)ctx; rowext[row] = 0; }
+
+static uint32_t be32(const uint8_t *p) { return (uint32_t)p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3]; }
+static uint16_t be16(const uint8_t *p) { return (uint16_t)(p[0] << 8 | p[1]); }
+
+int main(int argc, char **argv)
+{
+    if (argc != 4 && argc != 5) {
+        fprintf(stderr, "usage: %s SNAP.BIN rom.sfc oklab555.bin [frame.ppm]\n", argv[0]);
+        return 2;
+    }
+    long n, romsize, oksize;
+    uint8_t *snap = load(argv[1], &n);
+    uint8_t *rom = load(argv[2], &romsize);
+    uint8_t *okraw = load(argv[3], &oksize);
+    static int16_t oklab[32768 * 3];
+    for (int i = 0; i < 32768 * 3; i++) oklab[i] = (int16_t)(okraw[i * 2] << 8 | okraw[i * 2 + 1]);
+    if (n < 12 || memcmp(snap, "SMKXSNAP", 8) || be32(snap + 8) != PPU_SNAP_VERSION) {
+        fprintf(stderr, "%s: not a version %d SMKX snapshot\n", argv[1], PPU_SNAP_VERSION);
+        return 2;
+    }
+    const uint8_t *p = snap + 12;
+    const uint8_t *vram = p; p += 65536;
+    const uint8_t *cgram = p; p += 512;
+    const uint8_t *oam = p; p += 544;
+    const uint8_t *io = p; p += 0x6000;
+    uint16_t bgofs[8], m7[6], m7ofs[2];
+    for (int i = 0; i < 8; i++) { bgofs[i] = be16(p); p += 2; }
+    for (int i = 0; i < 6; i++) { m7[i] = be16(p); p += 2; }
+    for (int i = 0; i < 2; i++) { m7ofs[i] = be16(p); p += 2; }
+    uint32_t nlog = be32(p); p += 4;
+    PpuWrite log[256];
+    for (int i = 0; i < 256; i++) {
+        log[i].line = be16(p); log[i].reg = be16(p + 2); log[i].value = p[4]; log[i].pad = 0;
+        p += 6;
+    }
+    const uint8_t *wram = p; p += 131072;
+    const uint8_t *sram = p; p += 2048;
+    const uint8_t *falcon = p; p += 28672;
+    const uint8_t *pal_used = p; p += PAL_SNAP_BYTES;
+    const uint8_t *pal_next = p; p += PAL_SNAP_BYTES;
+    uint32_t noamseg = be32(p); p += 4;
+    static PpuOamSeg oamseg[PPU_OAMSEG_MAX];
+    for (int i = 0; i < PPU_OAMSEG_MAX; i++) {
+        oamseg[i].line = be16(p);
+        memcpy(oamseg[i].oam, p + 4, PPU_OAM_BYTES);
+        p += 4 + PPU_OAM_BYTES;
+    }
+    if (noamseg > PPU_OAMSEG_MAX) noamseg = PPU_OAMSEG_MAX;
+    if (p - snap != n) {
+        fprintf(stderr, "%s: %ld bytes, expected %ld\n", argv[1], n, (long)(p - snap));
+        return 2;
+    }
+    if ((io[0x100] & 0x80) && nlog == 0) {
+        /* the runtime does not compose a frame that is black throughout */
+        printf("INIDISP $%02X, no IRQ writes: forced blank, not composed\n", io[0x100]);
+        return 0;
+    }
+    PpuBus bus = {wram, sram, rom};
+    Palette used, next;
+    palette_load(&used, pal_used);
+    static uint32_t hist[256];
+    PpuInput in = {vram, cgram, oam, io, bgofs, m7, m7ofs, ppu_abus_hirom, &bus,
+                   log, (int)(nlog > 256 ? 256 : nlog), used.map, hist, NULL, oamseg, (int)noamseg,
+                   ppu_aptr_hirom};
+    static uint8_t chunky[PPU_W * PPU_H];
+    static uint16_t planar[PPU_W * PPU_H / 4];
+    ppu_init();
+    ppu_render(&in, chunky);
+    ppu_planar(chunky, planar);
+    static uint16_t planar4[PPU_W * PPU_H / 4];
+    ppu_c2p4(chunky, planar4, PPU_W * PPU_H / 16);
+    int cdiff = 0;
+    for (int i = 0; i < PPU_W * PPU_H / 4; i++) cdiff += planar4[i] != planar[i];
+    printf("c2p network vs bit by bit: %d words differ\n", cdiff);
+    int diff = 0;
+    for (int i = 0; i < PPU_W * PPU_H / 4; i++) {
+        uint8_t hi = (uint8_t)(planar[i] >> 8), lo = (uint8_t)planar[i];
+        diff += hi != falcon[i * 2];
+        diff += lo != falcon[i * 2 + 1];
+    }
+    long slots[16] = {0};
+    for (int i = 0; i < PPU_W * PPU_H; i++) slots[chunky[i]]++;
+    printf("IRQ writes %u, OAM segments %u, BG mode %d, INIDISP $%02X, TM $%02X\n", nlog,
+           noamseg, io[0x105] & 7, io[0x100], io[0x12C]);
+    printf("slot use:");
+    for (int i = 0; i < 16; i++) printf(" %ld", slots[i]);
+
+    /* the fast composer on the whole frame (no DSP rows) */
+    static uint32_t hist3[256];
+    static uint8_t chunky3[PPU_W * PPU_H];
+    in.hist = hist3;
+    ppu_fast_render(&in, chunky3);
+    int fdiff = 0, fhdiff = 0;
+    for (int i = 0; i < PPU_W * PPU_H; i++) fdiff += chunky3[i] != chunky[i];
+    for (int i = 0; i < 256; i++) fhdiff += hist3[i] != hist[i];
+    printf("\nfast composer vs reference: %d pixels, %d counts differ", fdiff, fhdiff);
+
+    /* the split path, as the Falcon runs it: fast composer, DSP rows */
+    static uint32_t hist2[256];
+    static uint8_t chunky2[PPU_W * PPU_H];
+    PpuM7Sink sink = {host_m7_row, host_cpu_row, 0};
+    in.hist = hist2;
+    in.m7sink = &sink;
+    ppu_fast_render(&in, chunky2);
+    int m7rows = 0, sdiff = 0, hdiff = 0;
+    for (int row = 0; row < PPU_H; row++) {
+        uint8_t *c = chunky2 + row * PPU_W;
+        if (rowext[row]) {
+            uint8_t idx[PPU_W];
+            m7rows++;
+            ppu_m7_pixels(vram, &rowline[row], idx);
+            for (int x = 0; x < PPU_W; x++)
+                if (c[x] == PPU_EXT) c[x] = used.map[idx[x]];
+        }
+        for (int x = 0; x < PPU_W; x++) sdiff += c[x] != chunky[row * PPU_W + x];
+    }
+    for (int i = 0; i < 256; i++) hdiff += hist[i] != hist2[i];
+    printf("\nMode 7 rows %d; split path vs whole: %d pixels, %d counts differ", m7rows, sdiff, hdiff);
+
+    if (argc == 5) {
+        FILE *f = fopen(argv[4], "wb");
+        if (!f) { perror(argv[4]); return 2; }
+        uint32_t rgb[16];
+        palette_scaled(&used, io[0x100] & 15, rgb);
+        fprintf(f, "P6\n%d %d\n255\n", PPU_W, PPU_H);
+        for (int i = 0; i < PPU_W * PPU_H; i++) {
+            const uint8_t *w = falcon + (i / 16) * 8;
+            int bit = 15 - (i & 15), v = 0;
+            for (int b = 0; b < 4; b++)
+                v |= (((w[b * 2] << 8 | w[b * 2 + 1]) >> bit) & 1) << b;
+            uint32_t c = (io[0x100] & 0x80) ? 0 : rgb[v];
+            fputc((int)(c >> 16) & 255, f);
+            fputc((int)(c >> 8) & 255, f);
+            fputc((int)c & 255, f);
+        }
+        fclose(f);
+    }
+
+    next = used;
+    palette_update(&next, hist, cgram, oklab);
+    uint8_t mine[PAL_SNAP_BYTES];
+    palette_save(&next, mine);
+    int pdiff = 0;
+    for (int i = 0; i < PAL_SNAP_BYTES; i++) pdiff += mine[i] != pal_next[i];
+    printf("\nFalcon planes vs host render: %d of 28672 bytes differ\n", diff);
+    printf("next palette vs host palette_update: %d of %d bytes differ\n", pdiff, PAL_SNAP_BYTES);
+    return diff != 0 || pdiff != 0 || sdiff != 0 || hdiff != 0 || fdiff != 0 || fhdiff != 0 || cdiff != 0;
+}

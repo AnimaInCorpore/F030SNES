@@ -1,0 +1,6 @@
+# Interrupt handlers the engines install as `JML handler` at $001500 (NMI) and
+# $001504 (IRQ); the ROM vectors jump there (`JML $001500` at $C0FF10, `JML
+# $001504` at $C0FF14, see analyze.wram_trampoline). One $BBAAAA per line,
+# found from the installers' `LDX #near X : STX $1501 : LDA #^X : STA $1503`
+# (and $1505/$1507) pairs; the labels are the disassembly's (third_party/ff6).
+# Super Castlevania IV: empty until the program is analysed (ROADMAP.md).

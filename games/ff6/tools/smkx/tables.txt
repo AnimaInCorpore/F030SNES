@@ -1,0 +1,11 @@
+# Jump tables whose length the listing cannot tell, so the translator would
+# cut them short: the table's handlers lie in bytes the disassembly kept as
+# incbin (analyze.rom_table stops at the first of them), or the listing puts
+# a label inside the table (both readers stop there). "$BBAAAA count"
+# (words) per line. Found by comparing each table read with the run of ROM
+# words that name listed code; scripts/table_audit.py does it.
+#
+# Audited 2026-09-29 (scripts/table_audit.py on FF6): no entries needed. The 13
+# tables it lists are all followed by a neighbouring table with its own label
+# (DrawCharGaugeTbl / DrawCharHPMPTbl, AICondTbl / AICmdTbl, ...), which is what
+# the reader stops at.

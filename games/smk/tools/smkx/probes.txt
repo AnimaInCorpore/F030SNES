@@ -1,0 +1,19 @@
+# 65816 addresses that report once, with the frame number, when first run.
+# Title-screen graphics loaders (they load SMK_GFX_TitleScreen):
+$81E10A
+$81E2F3
+# Main-loop state handlers (the DATA_808197 table, state index at $36):
+$808096
+$808067
+$8080BA
+$8080CA
+$8080D7
+$8080DE
+$808136
+$80810C
+$808166
+$80816D
+$808174
+$80817B
+$808190
+$8080E5

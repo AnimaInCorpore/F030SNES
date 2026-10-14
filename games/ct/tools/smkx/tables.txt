@@ -1,0 +1,67 @@
+# Jump tables whose length the listing cannot tell, so the translator would
+# cut them short: the table's handlers lie in bytes the disassembly kept as
+# incbin (analyze.rom_table stops at the first of them), or the listing puts
+# a label inside the table (both readers stop there). "$BBAAAA count"
+# (words) per line. Found by comparing each table read with the run of ROM
+# words that name listed code; runs into a neighbouring table don't count.
+#
+# BattleScene_DispatchCmd ($CD16AF, JSR (Dispatch_BattleSceneA,X)): scene
+# script commands $80-$F9; the table runs up to its first handler, $CD17A9.
+$CD16B5 122
+
+# EnemyAI_TargetOpTable ($C1AC2E, JSR (EnemyAI_TargetOpTable,X)): target
+# selectors $00-$38 of the enemy AI scripts; the listing labels entries 5
+# and 8, and the next table (for $C18333) starts at $C1B92D.
+$C1B8BB 57
+
+# TextModeTable ($C25839, JSR (TextModeTable,X) with $0230*2): four text
+# modes up to Text_DispatchState at $C2584A; the listing labels entry 2.
+$C25842 4
+
+# Dispatch_CF_Table16 ($CFEFE6, JSR (Dispatch_CF_Table16,X) with $A86D,X*2):
+# the table runs up to its first handler, $CFF03E.
+$CFF01E 16
+
+# Dispatch_BattleSceneB ($CD2A4E, JMP (Dispatch_BattleSceneB,X)): scene
+# commands, the table and most handlers in one incbin block; the table runs
+# up to its first handler, $CD2A8B.
+$CD2A51 29
+
+# MenuStateTable ($C223D8, JMP (MenuStateTable,X) with $027C*2): up to its
+# first handler, $C223EF.
+$C223DB 10
+
+# Name entry cursor ($C2E27D, JSR ($E298,X) with the d-pad direction $0D1E
+# 0-3): up to its first handler, $C2E2A0.
+$C2E298 4
+
+# Read as empty (every handler in incbin bytes, so the translator took no
+# entry; the audit skipped empty reads until 2026-09-27). Each table's
+# handlers start right after it.
+# Battle scene op ($CD2DE7, JMP ($CD2DEA,X) with ([$40] & $E0) >> 4):
+# eight handlers; the attract demo stopped at $CD2E3C at frame 15,207.
+$CD2DEA 8
+# Up to their first handlers, $CD2969 and $CD29AA.
+$CD2961 4
+$CD29A2 4
+# $C22202, JMP ($2205,X) with ($0002,X & $FF) * 2: up to $C22209.
+$C22205 2
+# $C25CA7, JMP ($5CAA,X), two flag bits: up to $C25CB2.
+$C25CAA 4
+# InventoryMenu ($C2B138, JSR ($B141,X), X 0-3 from CPX #$03): up to $C2B149.
+$C2B141 4
+
+# Checked, length as read: the ROM run goes on into a neighbouring table or
+# data (scripts/table_audit.py leaves the tables listed here out).
+$C06467 8	# next table $C06477 (site $C0633D)
+$C11FEA 7	# next table $C11FF8 (site $C11FC9)
+$C179A1 25	# next table $C179D3
+$C179D3 72	# next table $C17A63
+$C17A63 4	# next table $C17A6B
+$C17A6B 219	# site $C14CD4 takes commands below $DB
+$C1B80D 41	# next table $C1B85F
+$C1B85F 23	# next table $C1B88D
+$C1B88D 23	# next table $C1B8BB
+$C1B92D 13	# $C1B947 is data (LDA.L at $C182C5)
+$C1D9D7 45	# next table $C1DA31 (MP costs)
+$FDC2DF 3	# next table $FDC2E5 (site $FDC2CB)
